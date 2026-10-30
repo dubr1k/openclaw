@@ -229,12 +229,14 @@ export function prepareChatHistoryResponsePage(
         : Math.max(pagination.offset + 1, pagination.totalMessages - oldestSeq + 1);
   }
   const cursors = resolveChatHistoryPageCursors(historyPage.anchor, capped, normalized);
-  // Source cursors account for hidden rows already consumed by this page.
-  const hasMore = historyPage.anchor
-    ? Boolean(cursors.olderCursor)
-    : pagination !== undefined && candidateNextOffset !== undefined
+  const numericHasMore =
+    pagination !== undefined && candidateNextOffset !== undefined
       ? candidateNextOffset < pagination.totalMessages
       : undefined;
+  // Legacy rows without IDs still use numeric offsets; source anchors exclude consumed hidden rows.
+  const hasMore = historyPage.anchor
+    ? Boolean(cursors.olderCursor || (historyPage.anchor.hasOlder && numericHasMore))
+    : numericHasMore;
   const survivors = new Set(capped);
   const omittedCount = normalized.reduce<number>(
     (count, message) => count + (survivors.has(message) ? 0 : 1),

@@ -2968,10 +2968,7 @@ describe("gateway server chat", () => {
         JSON.stringify({ type: "model_change", provider: "mock", modelId: "mock" }),
         JSON.stringify({ type: "thinking_level_change", thinkingLevel: "off" }),
       ]);
-      const storePath = testState.sessionStorePath;
-      if (!storePath) {
-        throw new Error("session store path was not initialized");
-      }
+      const storePath = expectDefined(testState.sessionStorePath);
       for (let index = 0; index < 7; index += 1) {
         await appendTranscriptMessage(makeMainSessionScope(storePath), {
           eventId: `message-${index + 1}`,
@@ -2998,7 +2995,9 @@ describe("gateway server chat", () => {
       expect(history.payload?.messages?.map(readOpenClawSeq)).toEqual([2, 3, 4]);
       expect(history.payload?.offset).toBeUndefined();
       expect(history.payload?.nextOffset).toBeUndefined();
-      expect(history.payload?.hasMore).toBeUndefined();
+      expect(history.payload?.hasMore).toBe(true);
+      expect(history.payload?.olderCursor).toEqual(expect.any(String));
+      expect(history.payload?.newerCursor).toEqual(expect.any(String));
       expect(history.payload?.totalMessages).toBeUndefined();
     });
   });
