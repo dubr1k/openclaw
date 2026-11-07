@@ -265,9 +265,7 @@ describe.runIf("__vitest_browser__" in globalThis)("sidebar session filter popov
       await expect.poll(loadStoredSidebarSessionSortMode).toBe("updated");
       await userEvent.tab();
       await expect
-        .element(
-          page.getByRole("button", { name: "Hide empty groups: When filtering", exact: true }),
-        )
+        .element(page.getByRole("button", { name: "Hide empty groups: Never", exact: true }))
         .toHaveFocus();
       await userEvent.tab();
       await expect
@@ -467,7 +465,7 @@ describe.runIf("__vitest_browser__" in globalThis)("sidebar session filter popov
       for (const [label, choice, defaultValue] of [
         ["Group by", "Person", "Custom groups"],
         ["Sort by", "Last updated", "Created"],
-        ["Hide empty groups", "Always", "When filtering"],
+        ["Hide empty groups", "Always", "Never"],
         ["Show message preview", null, null],
       ] as const) {
         if (choice) {
@@ -641,7 +639,7 @@ describe.runIf("__vitest_browser__" in globalThis)("sidebar session filter popov
     }
     expect(menu.querySelector("#sidebar-sessions-owner")).toBeNull();
     await page.getByRole("button", { name: /^Hide empty groups:/ }).click();
-    await page.getByRole("option", { name: "Never", exact: true }).click();
+    await page.getByRole("option", { name: "When filtering", exact: true }).click();
     await page.getByRole("button", { name: "Reset", exact: true }).click();
     expect(loadStoredSidebarSessionStatusFilter()).toBe("active");
     expect(sidebar.sessionOwnerFilterId).toBeNull();
@@ -651,8 +649,9 @@ describe.runIf("__vitest_browser__" in globalThis)("sidebar session filter popov
     expect(loadStoredSidebarSessionSortMode()).toBe("created");
     expect(loadStoredSidebarSessionsShowPreview()).toBe(false);
     await expect
-      .element(page.getByRole("button", { name: "Hide empty groups: When filtering", exact: true }))
+      .element(page.getByRole("button", { name: "Hide empty groups: Never", exact: true }))
       .toBeVisible();
+    expect(sidebar.querySelector('[data-session-section="category:Empty"]')).not.toBeNull();
     await expectFilterCount(0);
     await expect.element(page.getByRole("radio", { name: "Active", exact: true })).toHaveFocus();
     expect(sidebar.querySelector(".sidebar-session-sort-menu")).toBe(menu);
