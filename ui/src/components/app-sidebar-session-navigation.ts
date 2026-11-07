@@ -34,6 +34,7 @@ import {
   personalSidebarZone,
   SidebarPinnedSessions,
   personalSidebarOwnerProjection,
+  personalSidebarAgentNavigationResult,
   personalSidebarOwnerFilterId,
   projectUnpinnedSessionRows,
 } from "./app-sidebar-personal-navigation.ts";
@@ -551,37 +552,32 @@ export abstract class AppSidebarSessionNavigationElement extends AppSidebarBase 
   private agentResumeKey(agentId: string): string {
     const latest = resolveLatestSidebarAgentSession({
       agentId,
-      result: this.selectedAgentSessionResult(agentId),
+      result: this.agentNavigationResult(agentId),
       context: this.context,
     });
     return latest?.key ?? buildAgentMainSessionKey({ agentId, mainKey: this.sessionMainKey() });
   }
 
-  /** Offline routes to Settings instead of a dead chat load. */
-  private openAgentConversation(agentId: string) {
-    if (!this.connected) {
-      this.onNavigate?.("appearance");
-      return;
-    }
-    this.selectSession(this.agentResumeKey(agentId));
-  }
-
   switchChipAgent(agentId: string) {
+    const resumeKey = this.connected ? this.agentResumeKey(agentId) : null;
     this.sidebarMenus.closeAgentMenu();
     this.expandAgent(agentId);
-    // Skills uses the shared agent selection in place; opening chat would
-    // discard the discovery page instead of updating its workspace scope.
+    // Skills keeps its shared selection in place instead of opening chat.
     if (this.activeRouteId !== "skills") {
-      this.openAgentConversation(agentId);
+      if (resumeKey) {
+        this.selectSession(resumeKey);
+      } else {
+        this.onNavigate?.("appearance");
+      }
     }
   }
 
   askAgentCapabilities(agentId: string) {
+    const key = this.connected ? this.agentResumeKey(agentId) : null;
     this.sidebarMenus.closeAgentMenu();
-    if (!this.connected) {
+    if (!key) {
       return;
     }
-    const key = this.agentResumeKey(agentId);
     const target = sessionNavigationTarget({
       face: "chat",
       sessionKey: key,
@@ -702,6 +698,17 @@ export abstract class AppSidebarSessionNavigationElement extends AppSidebarBase 
       : (this.sessionData.sessionResultsByAgent[selected] ?? null);
   }
 
+  private agentNavigationResult(agentId: string): SessionsListResult | null {
+    const context = this.context;
+    return (
+      personalSidebarAgentNavigationResult(
+        this,
+        agentId,
+        context ? rosterActivityStore(context).snapshot.result : null,
+      ) ?? this.selectedAgentSessionResult(agentId)
+    );
+  }
+
   selectedAgentMainSessionKey(agentId?: string): string {
     return resolveSidebarMainSessionKey({
       agentId: agentId ?? this.expandedAgentId(),
@@ -779,7 +786,7 @@ export abstract class AppSidebarSessionNavigationElement extends AppSidebarBase 
 
   agentUnreadCount(agentId: string): number {
     const normalized = normalizeAgentId(agentId);
-    const rows = this.selectedAgentSessionResult(normalized)?.sessions ?? [];
+    const rows = this.agentNavigationResult(normalized)?.sessions ?? [];
     return rows.filter(
       (row) => row.unread && !row.archived && this.sessionNavigationAgentId(row) === normalized,
     ).length;

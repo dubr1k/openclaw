@@ -5,10 +5,12 @@ import { gatewayPresentationScope } from "../app/gateway-presentation-scope.ts";
 import { isMobileNavLayout } from "../app/mobile-nav-layout.ts";
 import { patchSettings } from "../app/settings.ts";
 import { normalizeAgentLabel } from "../lib/agents/display.ts";
+import { rosterActivityStore } from "../lib/agents/roster-activity-store.ts";
 import { openEditor } from "../lib/editor-links.ts";
 import { isGatewayMethodAdvertised } from "../lib/gateway-methods.ts";
 import { openExternalUrlSafe } from "../lib/open-external-url.ts";
 import { t } from "../lib/reactive/i18n.ts";
+import { projectOwner } from "../lib/reactive/projection.ts";
 import { categoryClearReturnsToGroups } from "../lib/sessions/grouping.ts";
 import {
   canArchiveSessionRow,
@@ -109,6 +111,15 @@ export function renderSidebarAgentMenuForController(
     agent = () => chipAgent().agent,
     agents = () => chipAgent().agents,
     identities = () => chipAgent().identities;
+  const activity = createMemo(() => {
+    const context = host.sessionDataContext;
+    if (!context) {
+      return undefined;
+    }
+    const store = rosterActivityStore(context);
+    store.setInvolvingMe(host.sessionInvolvingMeFilterActive);
+    return projectOwner(store, (owner) => owner.snapshot);
+  });
   const activeName = createMemo(() => {
     const current = chipAgent();
     return current.agent ? normalizeAgentLabel(current.agent, current.identity) : "";
@@ -148,7 +159,10 @@ export function renderSidebarAgentMenuForController(
         resolveAvatarUrl: (url) => controller.agentMenuAvatars.resolve(url),
         avatarErrorHandler: (url) => controller.agentMenuAvatars.imageErrorHandler(url),
         openMode: controller.agentMenuInteractionState === "open-hover" ? "hover" : "click",
-        agentUnreadCount: (agentId) => host.agentUnreadCount(agentId),
+        agentUnreadCount: (agentId) => {
+          activity()?.read();
+          return host.agentUnreadCount(agentId);
+        },
         onPointerEnter: () => controller.handleAgentMenuPointerEnter(),
         onPointerLeave: () => controller.handleAgentMenuPointerLeave(),
         onAfterShow: () => controller.restoreFocusAfterAgentMenuHoverOpen(),

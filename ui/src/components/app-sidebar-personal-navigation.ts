@@ -10,6 +10,7 @@ import type {
   SessionConnectionScope,
   SessionListSnapshot,
 } from "../lib/sessions/session-capability.ts";
+import { normalizeAgentId } from "../lib/sessions/session-key.ts";
 import { showToast } from "../lib/toast.ts";
 import { SETTINGS_ROUTE_TARGETS } from "../pages/config/route-data.ts";
 import { buildReconciledSidebarZone } from "./app-sidebar-session-navigation-logic.ts";
@@ -280,4 +281,26 @@ export function personalSidebarOwnerProjection(
     selectedProfileId: host.sessionOwnerFilterId === self?.id ? self.id : undefined,
     self,
   });
+}
+
+/** Picker navigation uses authorized roster membership without changing sidebar membership. */
+export function personalSidebarAgentNavigationResult(
+  host: PersonalNavigationHost & {
+    sessionNavigationAgentId(session: Pick<SidebarRecentSession, "key" | "agentId">): string;
+  },
+  agentId: string,
+  inventory: SessionsListResult | null,
+): SessionsListResult | null {
+  if (!inventory) {
+    return null;
+  }
+  const state = host.getSessionNavigationState();
+  const rows = inventory.sessions.filter(
+    (row) => host.sessionNavigationAgentId(row) === normalizeAgentId(agentId),
+  );
+  const projected = rows.map((row) => state.toSidebarSession(row));
+  const keys = new Set(
+    personalSidebarOwnerProjection(host, projected, inventory.owners).rows.map((row) => row.key),
+  );
+  return { ...inventory, sessions: rows.filter((row) => keys.has(row.key)) };
 }
