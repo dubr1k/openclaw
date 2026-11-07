@@ -99,7 +99,7 @@ export function renderSidebarAgentCard(host: AppSidebarRenderHost): JSX.Element 
       when={host.sidebarAgentsMode !== "roster" && (cardAgent() || cached())}
       fallback={renderSidebarWorkspaceHeader(host)}
     >
-      <openclaw-tooltip prop:content={cardName()}>
+      <openclaw-tooltip prop:content={cardName()} placement="right">
         <SidebarAgentCard
           compact={true}
           agentName={cardName()}

@@ -13,10 +13,11 @@ import {
   formatPreservedWorktreesNotice,
 } from "../lib/sessions/worktree-preservation.ts";
 import { showToast } from "../lib/toast.ts";
-import type {
-  SidebarRecentSession,
-  SidebarSessionMutationResult,
-  SidebarSessionMutationScope,
+import {
+  storeSidebarSessionsGrouping,
+  type SidebarRecentSession,
+  type SidebarSessionMutationResult,
+  type SidebarSessionMutationScope,
 } from "./app-sidebar-session-types.ts";
 import { requestCloudWorkerStop } from "./cloud-worker-stop.runtime.ts";
 import { showConfirmDialog, type ConfirmDialogSkipPreference } from "./confirm-dialog.ts";
@@ -371,7 +372,10 @@ export async function createSessionGroup(
   if (!host.sessionData.isSessionMutationScopeCurrent(scope)) {
     return "stale";
   }
-  // A header-created group starts empty and needs no assignment.
+  // Reveal a header-created folder even in a flat list or filtered My Sessions view.
+  host.sessionsGrouping = "category";
+  storeSidebarSessionsGrouping("category");
+  host.setSessionsEmptyGroupsMode("never");
   host.requestUpdate();
   return "completed";
 }

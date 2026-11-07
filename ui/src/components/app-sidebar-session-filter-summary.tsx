@@ -140,9 +140,30 @@ function renderSidebarSessionFilter(
   );
 }
 export function renderSessionListToolbar(host: SessionListHost & { onToggleSidebar?: () => void }) {
+  const groupAccess = createMemo(() =>
+    host.readSessionMutationAccess({
+      method: "sessions.groups.put",
+      requiredScope: "operator.write",
+    }),
+  );
   return (
     <div class="sidebar-session-toolbar sidebar-panel-header" onMouseDown={beginNativeWindowDrag}>
       <SidebarOwnerPicker host={host} />
+      <Show when={host.sidebarAgentsMode !== "roster"}>
+        <button
+          type="button"
+          class="sidebar-session-toolbar__button sidebar-session-toolbar__new-group"
+          title={(() => {
+            const access = groupAccess();
+            return access.allowed ? t("sessionsView.newGroup") : access.reason;
+          })()}
+          aria-label={t("sessionsView.newGroup")}
+          disabled={!host.connected || Boolean(host.sidebarSnapshot) || !groupAccess().allowed}
+          onClick={() => void host.sessionOrganizer.createSessionGroup()}
+        >
+          <Icon name="folder" />
+        </button>
+      </Show>
       {renderSidebarSessionFilter(host, "sidebar-session-toolbar__button")}
       <openclaw-sidebar-collapse-toggle prop:onToggle={() => host.onToggleSidebar?.()} />
     </div>

@@ -6,6 +6,7 @@ import type { SidebarSessionsGrouping } from "../lib/sessions/grouping.ts";
 import type { SolidControllerHost } from "../lit/solid-controller-host.ts";
 import type {
   SidebarRecentSession,
+  SidebarEmptyGroupsMode,
   SidebarSessionStatusFilter,
 } from "./app-sidebar-session-types.ts";
 import type { SessionDataController } from "./session-data-controller.ts";
@@ -23,6 +24,7 @@ export interface SessionOrganizerControllerHost extends SolidControllerHost {
   readonly sidebarEntries: readonly string[];
   readonly onUpdateSidebarEntries?: (entries: string[]) => void;
   sessionsGrouping: SidebarSessionsGrouping;
+  setSessionsEmptyGroupsMode(mode: SidebarEmptyGroupsMode): void;
   sessionsShowCron: boolean;
   sessionsShowPreview: boolean;
   sessionsShowSystem: boolean;

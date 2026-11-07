@@ -74,6 +74,7 @@ export interface SessionListHost {
   readonly collapsedSessionSections: ReadonlySet<string>;
   readonly sessionOrganizer: Pick<
     SessionOrganizerController,
+    | "createSessionGroup"
     | "draggingSidebarSection"
     | "draggingSessionKey"
     | "isDraggingChildSession"

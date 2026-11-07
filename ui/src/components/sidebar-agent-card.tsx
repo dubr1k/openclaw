@@ -48,7 +48,8 @@ export function SidebarAgentCard(props: SidebarAgentCardProps) {
     props.switcherAvailable ? t("agentChip.switchAgent") : t("agentChip.menuLabel");
   return (
     <openclaw-sidebar-agent-card
-      style={{ display: "contents" }}
+      // The compact card is also the tooltip anchor and needs a real layout box.
+      style={{ display: props.compact ? "block" : "contents" }}
       onContextMenu={(event) => props.onContextMenu?.(event)}
     >
       <div
