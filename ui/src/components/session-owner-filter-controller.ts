@@ -2,7 +2,7 @@ import type { ReactiveController, ReactiveControllerHost } from "lit";
 import type { SessionsListResult } from "../api/types.ts";
 import { gatewayPresentationScope } from "../app/gateway-presentation-scope.ts";
 import type { ApplicationGateway } from "../app/gateway.ts";
-import type { SessionListSnapshot } from "../lib/sessions/session-capability.ts";
+import { hasOperatorReadAccess } from "../app/operator-access.ts";
 import {
   loadStoredSidebarSessionOwnerFilter,
   storeSidebarSessionOwnerFilter,
@@ -19,7 +19,6 @@ export class SessionOwnerFilterController implements ReactiveController {
   involvingMe = false;
   private scope: string | null = null;
   private previous?: SidebarSessionOwnerFilter & { scope: string | null };
-  private pendingFacetRefresh: Promise<void> | null = null;
   private userIntent = false;
   private ownerFacet: { agentId: string; multiple: boolean } | null = null;
 
@@ -34,7 +33,6 @@ export class SessionOwnerFilterController implements ReactiveController {
       };
     },
     private readonly getContext: () => SessionOwnerFilterContext | undefined,
-    private readonly getFacet: () => SessionListSnapshot | undefined,
   ) {
     host.addController(this);
   }
@@ -67,38 +65,16 @@ export class SessionOwnerFilterController implements ReactiveController {
       if (previous) {
         this.host.sessionData.resetSessionList();
       }
-      const pending = userIntent
-        ? this.host.sessionData.refreshSidebarSessions()
-        : this.host.sessionData.scheduleSidebarSessions();
-      this.pendingFacetRefresh = pending;
-      void pending.finally(() => {
-        if (this.pendingFacetRefresh === pending) {
-          this.pendingFacetRefresh = null;
-          this.host.requestUpdate();
-        }
-      });
-      return;
-    }
-    const facet = this.getFacet();
-    if (
-      !this.pendingFacetRefresh &&
-      facet &&
-      !facet.loading &&
-      !facet.startupPending &&
-      !facet.error &&
-      facet.readSucceeded !== false &&
-      facet.result?.owners &&
-      this.ownerId &&
-      this.ownerId !== this.selfUserId &&
-      !facet.result.owners.some((owner) => owner.id === this.ownerId)
-    ) {
-      this.set(null, false, { automatic: true });
+      if (userIntent) {
+        void this.host.sessionData.refreshSidebarSessions();
+      } else {
+        void this.host.sessionData.scheduleSidebarSessions();
+      }
     }
   }
 
   hostDisconnected(): void {
     this.previous = undefined;
-    this.pendingFacetRefresh = null;
     this.userIntent = false;
   }
 
@@ -121,13 +97,11 @@ export class SessionOwnerFilterController implements ReactiveController {
     }
   }
 
-  set(ownerId: string | null, involvingMe = false, options?: { automatic: true }): void {
+  set(ownerId: string | null, involvingMe = false): void {
     this.restore();
     this.ownerId = involvingMe ? null : ownerId?.trim() || null;
     this.involvingMe = involvingMe;
-    if (!options?.automatic) {
-      this.userIntent = true;
-    }
+    this.userIntent = true;
     const context = this.getContext();
     const selfUserId = this.selfUserId;
     if (context && selfUserId) {
@@ -142,9 +116,12 @@ export class SessionOwnerFilterController implements ReactiveController {
   private restore(): void {
     const context = this.getContext();
     const selfUserId = this.selfUserId;
+    const auth = context?.gateway.snapshot.hello?.auth ?? null;
+    const fallbackOwnerId =
+      hasOperatorReadAccess(auth) && !auth?.sessionCap ? null : (selfUserId ?? null);
     const nextScope =
       context && selfUserId
-        ? JSON.stringify([context.gateway.connection.gatewayUrl, selfUserId])
+        ? JSON.stringify([context.gateway.connection.gatewayUrl, selfUserId, fallbackOwnerId])
         : null;
     if (nextScope === this.scope) {
       return;
@@ -154,7 +131,11 @@ export class SessionOwnerFilterController implements ReactiveController {
     this.ownerFacet = null;
     const stored =
       context && selfUserId
-        ? loadStoredSidebarSessionOwnerFilter(context.gateway.connection.gatewayUrl, selfUserId)
+        ? loadStoredSidebarSessionOwnerFilter(
+            context.gateway.connection.gatewayUrl,
+            selfUserId,
+            fallbackOwnerId,
+          )
         : { ownerId: null, involvingMe: false };
     this.ownerId = stored.ownerId;
     this.involvingMe = stored.involvingMe;

@@ -73,7 +73,7 @@ describe("sidebar session owner preference", () => {
       involvingMe: true,
     });
     expect(loadStoredSidebarSessionOwnerFilter("wss://two.example/ws", "profile-ada")).toEqual({
-      ownerId: "profile-ada",
+      ownerId: null,
       involvingMe: false,
     });
   });
@@ -111,7 +111,7 @@ describe("sidebar session owner preference", () => {
     };
 
     expect(loadStoredSidebarSessionOwnerFilter("wss://one.example/ws", "profile-ada")).toEqual({
-      ownerId: "profile-ada",
+      ownerId: null,
       involvingMe: false,
     });
     expect(() =>

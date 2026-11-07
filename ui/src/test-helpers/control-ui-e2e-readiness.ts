@@ -99,3 +99,20 @@ export async function waitForConfirmModal(page: Page): Promise<Locator> {
   }
   return modal;
 }
+
+export function installControlUiRosterNavigationWait(page: Page): void {
+  // Startup renders the selected descriptor before releasing the automatic roster.
+  // Keep navigation's Response, but give ordinary scenarios the fully rendered roster.
+  const goto = page.goto.bind(page);
+  const reload = page.reload.bind(page);
+  page.goto = async (...args) => {
+    const response = await goto(...args);
+    await waitForControlUiInitialRoster(page);
+    return response;
+  };
+  page.reload = async (...args) => {
+    const response = await reload(...args);
+    await waitForControlUiInitialRoster(page);
+    return response;
+  };
+}

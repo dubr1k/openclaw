@@ -9,16 +9,14 @@ import type { SessionOwnerOption } from "../lib/session-owner.ts";
 import {
   readSessionDragData,
   readSidebarSectionDragData,
-  readSidebarRouteDragData,
+  draggedSidebarNavigation,
+  draggedSidebarEntry,
   sessionDragActive,
   sidebarSectionDragActive,
   sidebarRouteDragActive,
   writeSidebarRouteDragData,
 } from "../lib/sessions/drag.ts";
-import {
-  categoryClearReturnsToGroups,
-  type SidebarSessionsGrouping,
-} from "../lib/sessions/grouping.ts";
+import { acceptsSessionDrop, type SidebarSessionsGrouping } from "../lib/sessions/grouping.ts";
 import {
   loadStoredCollapsedSessionSections,
   storeSidebarSessionStatusFilter,
@@ -135,9 +133,18 @@ export class SessionOrganizerController {
       await this.createSessionGroup(rows);
       return;
     }
-    await this.runOperation((operations, scope) =>
-      operations.runBatchSessionAction(this.host, action, rows, allUnread, scope),
-    );
+    await this.runOperation(async (operations, scope) => {
+      const moved = await operations.runBatchSessionAction(
+        this.host,
+        action,
+        rows,
+        allUnread,
+        scope,
+      );
+      if (action.kind === "move-to-group" && moved && moved.length > 0) {
+        this.revealMovedCategory(action.category, scope);
+      }
+    });
   }
 
   forkSession(session: SidebarRecentSession): Promise<void> {
@@ -263,29 +270,10 @@ export class SessionOrganizerController {
     this.host.requestUpdate();
   }
 
-  private draggedSidebarNavigation(dataTransfer: DataTransfer | null) {
-    const route = readSidebarRouteDragData(dataTransfer);
-    const routeEntry = parseSidebarEntry(route ? `route:${route}` : null);
-    if (routeEntry?.type === "route") {
-      return routeEntry;
-    }
-    const dynamicEntry = parseSidebarEntry(route);
-    return dynamicEntry;
-  }
-
-  private draggedSidebarEntry(dataTransfer: DataTransfer | null): string | null {
-    const navigation = this.draggedSidebarNavigation(dataTransfer);
-    if (navigation) {
-      return serializeSidebarEntry(navigation);
-    }
-    const sessionKey = readSessionDragData(dataTransfer);
-    return sessionKey ? serializeSidebarEntry({ type: "session", key: sessionKey }) : null;
-  }
-
   private isSidebarZoneDragCompatible(dataTransfer: DataTransfer | null): boolean {
     const entry = this.draggingSidebarEntry
       ? parseSidebarEntry(this.draggingSidebarEntry)
-      : this.draggedSidebarNavigation(dataTransfer);
+      : draggedSidebarNavigation(dataTransfer);
     // During dragover browsers protect payload reads, so use the source's key.
     const sessionKey =
       entry?.type === "session"
@@ -349,7 +337,7 @@ export class SessionOrganizerController {
   }
 
   handleSidebarZoneDrop(event: DragEvent, targetEntry?: string) {
-    const entry = this.draggedSidebarEntry(event.dataTransfer);
+    const entry = draggedSidebarEntry(event.dataTransfer);
     if (!entry) {
       return;
     }
@@ -406,7 +394,7 @@ export class SessionOrganizerController {
   }
 
   handleSessionListDrop(event: DragEvent) {
-    const entry = this.draggedSidebarNavigation(event.dataTransfer);
+    const entry = draggedSidebarNavigation(event.dataTransfer);
     if (entry) {
       event.preventDefault();
       const serialized = serializeSidebarEntry(entry);
@@ -629,29 +617,28 @@ export class SessionOrganizerController {
     category: string | null,
     patch: { pinned?: boolean } = {},
   ): Promise<void> {
-    return this.runOperation((operations, scope) =>
-      operations.assignSessionCategory(this.host, session, category, scope, patch),
-    );
+    return this.runOperation(async (operations, scope) => {
+      const result = await operations.assignSessionCategory(
+        this.host,
+        session,
+        category,
+        scope,
+        patch,
+      );
+      if (result === "completed") {
+        this.revealMovedCategory(category, scope);
+      }
+    });
   }
 
-  private sectionAcceptsSession(
-    sectionId: string,
-    category: string | undefined,
-    session: SidebarRecentSession | undefined,
-  ): boolean {
-    if (sectionId === "pinned") {
-      return true;
-    }
+  private revealMovedCategory(category: string | null, scope: SidebarSessionMutationScope): void {
     if (
-      this.host.sessionsGrouping === "category" &&
-      (sectionId === "ungrouped" || Boolean(category))
+      category &&
+      this.host.sessionData.isSessionMutationScopeCurrent(scope) &&
+      this.collapsedSessionSections.has(`category:${category}`)
     ) {
-      return true;
+      this.toggleSection(`category:${category}`);
     }
-    return (
-      sectionId === "groups" &&
-      Boolean(session && categoryClearReturnsToGroups(session, this.host.sessionsGrouping))
-    );
   }
 
   sectionDragOver(event: DragEvent, sectionId: string, category?: string) {
@@ -678,7 +665,7 @@ export class SessionOrganizerController {
     const session = this.draggingSessionKey
       ? this.host.findSidebarMenuSessionByKey(this.draggingSessionKey)
       : undefined;
-    if (!this.sectionAcceptsSession(sectionId, category, session)) {
+    if (!acceptsSessionDrop(this.host.sessionsGrouping, sectionId, category, session)) {
       event.stopPropagation();
       return;
     }
@@ -714,7 +701,10 @@ export class SessionOrganizerController {
     }
     // Rows can be dragged from a browsed agent section, so search all caches.
     const session = sessionKey ? this.host.findSidebarMenuSessionByKey(sessionKey) : undefined;
-    if (!sourceSectionId && !this.sectionAcceptsSession(sectionId, category, session)) {
+    if (
+      !sourceSectionId &&
+      !acceptsSessionDrop(this.host.sessionsGrouping, sectionId, category, session)
+    ) {
       event.stopPropagation();
       return;
     }

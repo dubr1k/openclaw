@@ -5,6 +5,7 @@ import { createDeferred } from "../../../test/helpers/promise.js";
 import { sessionsResult } from "../lib/sessions/session-capability.test-support.ts";
 import type { SessionListSnapshot } from "../lib/sessions/session-capability.ts";
 import { createApplicationGateway } from "../test-helpers/application-context-fixtures.ts";
+import { gatewayHelloForMethods } from "../test-helpers/gateway-methods.ts";
 import { createStorageMock } from "../test-helpers/storage.ts";
 import {
   loadStoredSidebarSessionOwnerFilter,
@@ -45,7 +46,6 @@ function fixture() {
   const context = {
     gateway,
   };
-  let facet: SessionListSnapshot | undefined;
   const host = {
     isConnected: true,
     addController: vi.fn(),
@@ -62,11 +62,7 @@ function fixture() {
       scheduleSidebarSessions: vi.fn(() => Promise.resolve()),
     },
   };
-  const controller = new SessionOwnerFilterController(
-    host,
-    () => context,
-    () => facet,
-  );
+  const controller = new SessionOwnerFilterController(host, () => context);
   const update = () => {
     controller.hostUpdate();
     controller.hostUpdated();
@@ -77,7 +73,7 @@ function fixture() {
     context,
     update,
     facet: (value: SessionListSnapshot) => {
-      facet = value;
+      controller.observeOwnerFacet(value.agentId ?? "main", value.result?.owners);
       update();
     },
   };
@@ -93,12 +89,12 @@ function ownerFacet(id: string): SessionListSnapshot {
 }
 
 describe("SessionOwnerFilterController", () => {
-  it("schedules the default self filter and immediately refreshes explicit owner choices", () => {
+  it("schedules the default agent-wide view and immediately refreshes explicit owner choices", () => {
     const { controller, host, update } = fixture();
     controller.hostConnected();
     update();
     expect(host.sidebarSessionOwnerFilter()).toEqual({
-      ownerId: "profile-ada",
+      ownerId: null,
       involvingMe: false,
     });
     expect(host.sessionData.scheduleSidebarSessions).toHaveBeenCalledOnce();
@@ -120,12 +116,16 @@ describe("SessionOwnerFilterController", () => {
     context.gateway.snapshot.selfUser = { id: "profile-ada" };
     update();
     expect(host.sidebarSessionOwnerFilter()).toEqual({
-      ownerId: "profile-ada",
+      ownerId: null,
       involvingMe: false,
     });
   });
 
   it("retains a known profile's filter while reconnect identity is unresolved", () => {
+    storeSidebarSessionOwnerFilter("wss://one.example/ws", "profile-ada", {
+      ownerId: "profile-ada",
+      involvingMe: false,
+    });
     const { controller, context, host, update } = fixture();
     controller.hostConnected();
     update();
@@ -171,7 +171,7 @@ describe("SessionOwnerFilterController", () => {
       expect(host.sessionData.refreshSidebarSessions).not.toHaveBeenCalled();
       expect(host.sessionData.scheduleSidebarSessions).toHaveBeenCalledTimes(2);
       expect(host.sidebarSessionOwnerFilter()).toEqual({
-        ownerId: "replacement-profile",
+        ownerId: null,
         involvingMe: false,
       });
     },
@@ -221,7 +221,7 @@ describe("SessionOwnerFilterController", () => {
     context.gateway.connection.gatewayUrl = "wss://two.example/ws";
     update();
     expect(host.sidebarSessionOwnerFilter()).toEqual({
-      ownerId: "profile-bob",
+      ownerId: null,
       involvingMe: false,
     });
     controller.set("owner-two");
@@ -233,6 +233,42 @@ describe("SessionOwnerFilterController", () => {
     expect(loadStoredSidebarSessionOwnerFilter("wss://one.example/ws", "profile-bob")).toEqual({
       ownerId: null,
       involvingMe: true,
+    });
+  });
+
+  it("keeps a restricted default and re-evaluates it when read access changes", () => {
+    const { controller, context, host, update } = fixture();
+    context.gateway.snapshot.hello = gatewayHelloForMethods([], ["operator.sessions.read"]);
+    controller.hostConnected();
+    update();
+    expect(host.sidebarSessionOwnerFilter()).toEqual({
+      ownerId: "profile-ada",
+      involvingMe: false,
+    });
+    context.gateway.snapshot.hello = gatewayHelloForMethods([], ["operator.read"]);
+    update();
+    expect(host.sidebarSessionOwnerFilter()).toEqual({ ownerId: null, involvingMe: false });
+    controller.set("profile-ada");
+    update();
+    context.gateway.snapshot.hello = gatewayHelloForMethods([], ["operator.sessions.read"]);
+    update();
+    context.gateway.snapshot.hello = gatewayHelloForMethods([], ["operator.read"]);
+    update();
+    expect(host.sidebarSessionOwnerFilter()).toEqual({
+      ownerId: "profile-ada",
+      involvingMe: false,
+    });
+  });
+
+  it("retains the signed-in default for a session-scoped guest", () => {
+    const { controller, context, host, update } = fixture();
+    const hello = gatewayHelloForMethods([], ["operator.read"]);
+    context.gateway.snapshot.hello = { ...hello, auth: { ...hello.auth, sessionCap: "view" } };
+    controller.hostConnected();
+    update();
+    expect(host.sidebarSessionOwnerFilter()).toEqual({
+      ownerId: "profile-ada",
+      involvingMe: false,
     });
   });
 
@@ -262,7 +298,7 @@ describe("SessionOwnerFilterController", () => {
     expect(host.sessionData.scheduleSidebarSessions).toHaveBeenCalledTimes(2);
   });
 
-  it("clears absent owners only from a settled complete owner facet", async () => {
+  it("preserves an explicit owner absent from the selected agent's complete facet", async () => {
     const { controller, host, update, facet } = fixture();
     controller.hostConnected();
     controller.set("owner-bob");
@@ -281,13 +317,13 @@ describe("SessionOwnerFilterController", () => {
     facet(ownerFacet("owner-bob"));
     expect(controller.ownerId).toBe("owner-bob");
     facet(ownerFacet("profile-ada"));
-    expect(controller.ownerId).toBeNull();
+    expect(controller.ownerId).toBe("owner-bob");
     expect(loadStoredSidebarSessionOwnerFilter("wss://one.example/ws", "profile-ada")).toEqual({
-      ownerId: null,
+      ownerId: "owner-bob",
       involvingMe: false,
     });
     update();
     expect(host.sessionData.refreshSidebarSessions).toHaveBeenCalledOnce();
-    expect(host.sessionData.scheduleSidebarSessions).toHaveBeenCalledOnce();
+    expect(host.sessionData.scheduleSidebarSessions).not.toHaveBeenCalled();
   });
 });

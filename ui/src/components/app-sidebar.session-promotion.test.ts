@@ -122,9 +122,15 @@ it("drags a nested conversation into the top level and keeps its history identit
   expect(request.mock.calls.filter(([method]) => method === "sessions.patch")).toHaveLength(1);
 });
 
-it.each(["existing group", "new group", "batch group"])(
-  "keeps an archived parent's child independent after moving to a %s",
-  async (action) => {
+it.each([
+  { action: "existing group", rejected: false },
+  { action: "new group", rejected: false },
+  { action: "batch group", rejected: false },
+  { action: "existing group", rejected: true },
+  { action: "batch group", rejected: true },
+])(
+  "preserves child identity and reveals only an accepted $action move (rejected=$rejected)",
+  async ({ action, rejected }) => {
     let parent: GatewaySessionRow = {
       key: "agent:main:parent",
       sessionId: "parent-id",
@@ -156,6 +162,9 @@ it.each(["existing group", "new group", "batch group"])(
         const patch =
           method === "sessions.patch" ? query : isRecord(query.patch) ? query.patch : {};
         patches.push(patch);
+        if (rejected) {
+          throw new Error("Synthetic group move rejected");
+        }
         child = {
           ...child,
           ...(typeof patch.sidebarRoot === "boolean" ? { sidebarRoot: patch.sidebarRoot } : {}),
@@ -181,6 +190,9 @@ it.each(["existing group", "new group", "batch group"])(
     try {
       const row = sidebar.findSidebarSessionByKey(child.key)!;
       expect(row).toMatchObject({ isChild: false, pinnable: false });
+      if (action !== "new group") {
+        sidebar.sessionOrganizer.toggleSection("category:Projects");
+      }
       if (action === "existing group") {
         await sidebar.sessionOrganizer.assignSessionCategory(row, "Projects");
       } else if (action === "new group") {
@@ -197,6 +209,16 @@ it.each(["existing group", "new group", "batch group"])(
       expect(patches).toEqual([
         expect.objectContaining({ category: "Projects", sidebarRoot: true }),
       ]);
+      if (action !== "new group") {
+        expect(sidebar.sessionOrganizer.collapsedSessionSections.has("category:Projects")).toBe(
+          rejected,
+        );
+      }
+      if (rejected) {
+        expect(child.category).toBeUndefined();
+        expect(sidebar.sessionData.sessionMutationError).toContain("Synthetic group move rejected");
+        return;
+      }
       parent = { ...parent, archived: false, updatedAt: 10 };
       child = { ...child, category: undefined, updatedAt: 11 };
       await sessions.refresh({ agentId: "main", force: true });

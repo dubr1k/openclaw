@@ -1,3 +1,5 @@
+import { parseSidebarEntry, serializeSidebarEntry } from "../../app-navigation.ts";
+
 // Private MIME keeps stray text and file drags from becoming session actions.
 export const SESSION_DRAG_MIME = "application/x-openclaw-session-key";
 const SIDEBAR_SECTION_DRAG_MIME = "application/x-openclaw-session-group";
@@ -35,3 +37,22 @@ export const sidebarSectionDragActive = sectionDrag.active;
 export const writeSidebarRouteDragData = routeDrag.write;
 export const readSidebarRouteDragData = routeDrag.read;
 export const sidebarRouteDragActive = routeDrag.active;
+
+export function draggedSidebarNavigation(dataTransfer: DataTransfer | null) {
+  const route = readSidebarRouteDragData(dataTransfer);
+  const routeEntry = parseSidebarEntry(route ? `route:${route}` : null);
+  if (routeEntry?.type === "route") {
+    return routeEntry;
+  }
+  const dynamicEntry = parseSidebarEntry(route);
+  return dynamicEntry;
+}
+
+export function draggedSidebarEntry(dataTransfer: DataTransfer | null): string | null {
+  const navigation = draggedSidebarNavigation(dataTransfer);
+  if (navigation) {
+    return serializeSidebarEntry(navigation);
+  }
+  const sessionKey = readSessionDragData(dataTransfer);
+  return sessionKey ? serializeSidebarEntry({ type: "session", key: sessionKey }) : null;
+}

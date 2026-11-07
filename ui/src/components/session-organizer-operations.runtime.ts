@@ -244,7 +244,7 @@ export async function runBatchSessionAction(
   rows: SidebarRecentSession[],
   allUnread: boolean,
   scope: SidebarSessionMutationScope,
-): Promise<void> {
+): Promise<SessionActionRow[] | null | void> {
   switch (action.kind) {
     case "toggle-unread":
       await patchSessionRows(host, rows, { unread: !allUnread }, scope);
@@ -253,7 +253,7 @@ export async function runBatchSessionAction(
       }
       break;
     case "move-to-group":
-      await moveSessionRowsToCategory(
+      return moveSessionRowsToCategory(
         host,
         rows.filter(
           (row) => (row.category ?? null) !== action.category || needsGroupPromotion(row),
@@ -261,7 +261,6 @@ export async function runBatchSessionAction(
         action.category,
         scope,
       );
-      break;
     case "toggle-archived":
       if (rows.every((row) => row.archived === true)) {
         await patchSessionRows(host, rows, { archived: false }, scope, { sessionScope: true });
@@ -387,29 +386,29 @@ export async function assignSessionCategory(
   scope: SidebarSessionMutationScope,
   patch: { pinned?: boolean } = {},
   options: { resolveSession?: () => SessionActionRow | null } = {},
-): Promise<void> {
+): Promise<SidebarSessionMutationResult> {
   if (!host.sessionData.isSessionMutationScopeCurrent(scope)) {
-    return;
+    return "stale";
   }
   const catalogChanged = Boolean(category && !host.knownSessionGroups().includes(category));
   if (category && (await rememberSessionGroup(host, category, scope)) !== "completed") {
-    return;
+    return "failed";
   }
   const currentSession = options.resolveSession ? options.resolveSession() : session;
   if (!currentSession) {
     showToast({
       message: t(catalogChanged ? "sessionsView.newGroupMoveSkipped" : "common.refresh"),
     });
-    return;
+    return "stale";
   }
   if (
     (currentSession.category ?? null) === category &&
     patch.pinned === undefined &&
     !needsGroupPromotion(currentSession)
   ) {
-    return;
+    return "completed";
   }
-  await patchSession(
+  return await patchSession(
     host,
     currentSession,
     { category, ...patch, ...(needsGroupPromotion(currentSession) ? { sidebarRoot: true } : {}) },

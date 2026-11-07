@@ -378,13 +378,14 @@ function sidebarSessionOwnerFilterStorageKey(gatewayUrl: string, selfUserId: str
 export function loadStoredSidebarSessionOwnerFilter(
   gatewayUrl: string,
   selfUserId: string,
+  fallbackOwnerId: string | null = null,
 ): SidebarSessionOwnerFilter {
   try {
     const stored = getSafeLocalStorage()?.getItem(
       sidebarSessionOwnerFilterStorageKey(gatewayUrl, selfUserId),
     );
     if (stored === null || stored === undefined) {
-      return { ownerId: selfUserId, involvingMe: false };
+      return { ownerId: fallbackOwnerId, involvingMe: false };
     }
     const ownerId = stored?.startsWith("owner:") ? stored.slice("owner:".length).trim() : "";
     return {
@@ -392,8 +393,8 @@ export function loadStoredSidebarSessionOwnerFilter(
       involvingMe: stored === "involving-me",
     };
   } catch {
-    // A disabled store still uses the signed-in owner default.
-    return { ownerId: selfUserId, involvingMe: false };
+    // Storage availability does not change the caller's authorized default.
+    return { ownerId: fallbackOwnerId, involvingMe: false };
   }
 }
 

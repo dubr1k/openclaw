@@ -140,14 +140,7 @@ export abstract class AppSidebarSessionNavigationElement extends AppSidebarBase 
   private readonly catalogsMemo = new SidebarProjectionMemo<SidebarSessionCatalog[]>();
   private readonly sectionsMemo = new SidebarProjectionMemo<SidebarVisibleSections>();
   private readonly homeMemos = new Map<string, SidebarProjectionMemo<SidebarHomeSession>>();
-  readonly sessionOwnerFilter = new SessionOwnerFilterController(
-    this,
-    () => this.context,
-    () =>
-      this.context?.sessions.listSnapshot(
-        this.sessionData.sessionListQuery(this.expandedAgentId()),
-      ),
-  );
+  readonly sessionOwnerFilter = new SessionOwnerFilterController(this, () => this.context);
   readonly sessionData = new SessionDataController(this);
   readonly navigationCatalog = new SidebarNavigationCatalog(this, () => this.context);
   readonly sessionPullRequests = new SessionPullRequestIndicatorsController(this, {

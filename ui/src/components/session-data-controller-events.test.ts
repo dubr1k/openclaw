@@ -1,7 +1,24 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 import type { SessionsListResult } from "../api/types.ts";
-import { publishSidebarSessionList } from "./session-data-controller-events.ts";
+import {
+  publishSidebarSessionList,
+  sidebarSessionListQuery,
+} from "./session-data-controller-events.ts";
+
+it.each(["alpha", "beta", "new-agent"])(
+  "keeps an explicit owner filter inside the selected agent %s",
+  (agentId) => {
+    const query = sidebarSessionListQuery(
+      {
+        sidebarSessionOwnerFilter: () => ({ ownerId: "viewer", involvingMe: false }),
+        sidebarSessionStatusFilter: () => "active",
+      },
+      agentId,
+    );
+    expect(query).toMatchObject({ agentId, ownerId: "viewer" });
+  },
+);
 
 describe("publishSidebarSessionList", () => {
   const createOwner = () => ({

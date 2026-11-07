@@ -224,6 +224,19 @@ export function categoryClearReturnsToGroups(
   );
 }
 
+export function acceptsSessionDrop(
+  grouping: SidebarSessionsGrouping,
+  sectionId: string,
+  category: string | undefined,
+  session: SidebarGroupableRow | undefined,
+): boolean {
+  return (
+    sectionId === "pinned" ||
+    (grouping === "category" && (sectionId === "ungrouped" || Boolean(category))) ||
+    (sectionId === "groups" && Boolean(session && categoryClearReturnsToGroups(session, grouping)))
+  );
+}
+
 /**
  * Zone partition: pinned, named categories (persisted `knownGroups` order,
  * new ones alphabetical), other sessions ("ungrouped"),
