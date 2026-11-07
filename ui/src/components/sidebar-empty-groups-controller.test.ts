@@ -28,12 +28,25 @@ function fixture() {
 }
 
 describe("personal empty-group preference", () => {
+  it("shows authorized folders by default without persisting an implicit choice", () => {
+    const { controller } = fixture();
+    expect(controller.mode).toBe("never");
+    expect(storage.length).toBe(0);
+  });
+
+  it.each(["filtering", "always", "never"] as const)(
+    "preserves explicit %s on a new controller",
+    (mode) => {
+      fixture().controller.set(mode);
+      expect(fixture().controller.mode).toBe(mode);
+    },
+  );
   it("keeps anonymous browser choices separate from signed-in users", () => {
     const { controller, gateway } = fixture();
     controller.set("always");
     gateway.snapshot.selfUser = null;
     controller.reconcile();
-    expect(controller.mode).toBe("filtering");
+    expect(controller.mode).toBe("never");
     controller.set("never");
     gateway.snapshot.selfUser = { id: "ada" };
     controller.reconcile();
@@ -53,7 +66,7 @@ describe("personal empty-group preference", () => {
     expect(storage.getItem("openclaw:sidebar:sessions:hide-empty-groups")).toBeNull();
     gateway.snapshot.selfUser = { id: "lin" };
     controller.reconcile();
-    expect(controller.mode).toBe("filtering");
+    expect(controller.mode).toBe("never");
     gateway.snapshot.selfUser = { id: "ada" };
     controller.reconcile();
     expect(controller.mode).toBe(expected);
@@ -80,14 +93,14 @@ describe("personal empty-group preference", () => {
     controller.set("never");
     gateway.snapshot.selfUser = { id: "lin" };
     controller.set("always");
-    expect(controller.mode).toBe("filtering");
+    expect(controller.mode).toBe("never");
     controller.set("always");
     expect(controller.mode).toBe("always");
     gateway.snapshot.phase = "reconnecting";
     gateway.snapshot.selfUser = null;
     gateway.connectionRevision += 1;
     expect(controller.reconcile()).toBe(true);
-    expect(controller.mode).toBe("filtering");
+    expect(controller.mode).toBe("never");
     gateway.snapshot.phase = "connected";
     gateway.snapshot.selfUser = { id: "ada" };
     controller.reconcile();
@@ -95,7 +108,7 @@ describe("personal empty-group preference", () => {
     gateway.snapshot.phase = "stopped";
     gateway.snapshot.selfUser = null;
     controller.reconcile();
-    expect(controller.mode).toBe("filtering");
+    expect(controller.mode).toBe("never");
   });
 
   it("keeps the view usable when browser persistence is denied", () => {
@@ -106,7 +119,7 @@ describe("personal empty-group preference", () => {
       throw new Error("denied");
     });
     const { controller, host } = fixture();
-    expect(controller.mode).toBe("filtering");
+    expect(controller.mode).toBe("never");
     controller.set("never");
     controller.reconcile();
     expect(controller.mode).toBe("never");
