@@ -188,7 +188,7 @@ function renderSidebarWorkspaceHeader(host: AppSidebarRenderHost): JSX.Element {
   const name = () => brand().name;
   const menuOpen = () => host.sidebarMenus.agentMenuPosition !== null;
   return (
-    <openclaw-tooltip prop:content={name()}>
+    <openclaw-tooltip prop:content={name()} placement="right">
       <div class="sidebar-workspace-header sidebar-workspace-header--rail">
         <button
           type="button"
